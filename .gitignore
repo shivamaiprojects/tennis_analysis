@@ -1,0 +1,40 @@
+# Virtual environment
+.venv/
+
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# YOLO training outputs
+runs/
+
+# All model weights (VERY IMPORTANT for CV projects)
+*.pt
+
+# Data (usually too large for Git)
+data/
+datasets/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Testing
+.pytest_cache/
+
+# Logs
+*.log
+
+# Archives
+*.zip
+*.tar
+*.gz
+*.rar
+
+# OS files
+.DS_Store
