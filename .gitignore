@@ -1,40 +1,53 @@
-# Virtual environment
+# Virtual environments
 .venv/
+venv/
+env/
 
-# Environment variables
+# Environment variables (secrets — never commit)
 .env
 
-# Python cache
+# Python bytecode / build artifacts
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
 
-# VS Code
+# IDE / editor
 .vscode/
+.idea/
+*.swp
 
+# ML / CV artifacts
 # YOLO training outputs
 runs/
-
-# All model weights (VERY IMPORTANT for CV projects)
+# PyTorch weights
 *.pt
+*.pth
+# Exported models
+*.onnx
+# Cached detection stubs
+*.pkl
 
-# Data (usually too large for Git)
+# Data (too large for Git)
 data/
 datasets/
+input_videos/
+output_videos/
 
-# Notebook checkpoints
+# Jupyter
 .ipynb_checkpoints/
 
 # Testing
 .pytest_cache/
 
-# Logs
+# Logs and archives
 *.log
-
-# Archives
 *.zip
 *.tar
 *.gz
 *.rar
 
-# OS files
+# OS metadata
 .DS_Store
+Thumbs.db
+desktop.ini
