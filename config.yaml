@@ -1,0 +1,34 @@
+# =============================================================================
+# Tennis Analysis — Master Configuration
+# =============================================================================
+# Anyone tuning the pipeline edits THIS file, not the code.
+# Paths are relative to the project root (where main.py lives).
+
+# --- File paths ---
+paths:
+  input_video: "data/input/input_video.mp4"
+  output_video: "output_videos/output_video.mp4"
+  models:
+    ball_detector: "models/yolo26n_fine_tuned_100epoch_best.pt"
+    court_keypoints: "models/keypoints_model.pth"
+    player_detector: "models/yolo26n.pt"
+  stubs:
+    player_detections: "runs/stubs/player_detections.pkl"
+    ball_detections: "runs/stubs/ball_detections.pkl"
+
+# --- Model behavior ---
+ball_detection:
+  confidence_threshold: 0.15   # lower = more detections, more false positives
+  image_size: 640              # YOLO input resolution
+
+player_detection:
+  confidence_threshold: 0.5
+  yolo_class_person: 0         # In COCO, "person" is class 0
+
+court_keypoints:
+  num_keypoints: 14
+  input_size: 224              # Must match training
+
+# --- Pipeline behavior ---
+use_stubs: true                # Load cached detections when available
+device: "auto"                 # "cuda", "cpu", or "auto"
