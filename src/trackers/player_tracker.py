@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from src.utils.bbox_utils import get_center, measure_distance
+from src.utils.bbox_utils import get_center, get_foot_position, measure_distance
 
 
 # COCO class index for "person"
@@ -103,47 +103,69 @@ class PlayerTracker:
             out[int(tid)] = box.tolist()
         return out
 
+
     def choose_and_filter_players(
         self,
         court_keypoints: np.ndarray,
         player_detections: List[Dict[int, List[float]]],
     ) -> List[Dict[int, List[float]]]:
-        """Keep only the 2 track IDs closest to the court across the video.
+        """Keep only the 2 track IDs that are actual players.
 
-        Uses the first non-empty frame to pick the 2 winners, then applies
-        that filter to every frame.
+        Two-stage filter:
+        1. Discard track IDs that appear in fewer than MIN_FRAMES_FRACTION
+            of frames (rejects transient ball-kid/audience blips).
+        2. Rank the survivors by MEAN signed distance to the court polygon.
+            Top 2 win.
         """
-        first_non_empty = next((d for d in player_detections if d), {})
+        MIN_FRAMES_FRACTION = 0.5   # a real player is on-frame at least half the video
 
-        if len(first_non_empty) <= 2:
-            # Nothing to filter — keep whatever we found
-            chosen = list(first_non_empty.keys())
-        else:
-            chosen = self._choose_players(court_keypoints, first_non_empty)
+        polygon = np.array([
+            [court_keypoints[0], court_keypoints[1]],
+            [court_keypoints[2], court_keypoints[3]],
+            [court_keypoints[6], court_keypoints[7]],
+            [court_keypoints[4], court_keypoints[5]],
+        ], dtype=np.float32)
+
+        # Score every track ID across every frame it appears in
+        scores: Dict[int, List[float]] = {}
+        for det in player_detections:
+            for tid, box in det.items():
+                foot = get_foot_position(box)
+                signed_dist = cv2.pointPolygonTest(
+                    polygon, (float(foot[0]), float(foot[1])), True
+                )
+                scores.setdefault(tid, []).append(signed_dist)
+
+        # Filter to track IDs present in enough frames to be a real player
+        min_frames = int(MIN_FRAMES_FRACTION * len(player_detections))
+        persistent = {tid: vals for tid, vals in scores.items() if len(vals) >= min_frames}
+
+        print(f"[PLAYER_FILTER] {len(scores)} total tracks, "
+            f"{len(persistent)} present in >={min_frames} frames")
+
+        if len(persistent) < 2:
+            # Fallback: use all tracks if we don't have 2 persistent ones
+            persistent = scores
+
+        # Rank the survivors by mean signed distance (most-inside first)
+        mean_scores = [(tid, sum(vals) / len(vals)) for tid, vals in persistent.items()]
+        mean_scores.sort(key=lambda pair: pair[1], reverse=True)
+
+        print("[PLAYER_FILTER] Ranked persistent candidates:")
+        for tid, score in mean_scores:
+            print(f"  tid={tid}: mean_signed_dist={score:.1f} px "
+                f"(n_frames={len(persistent[tid])})")
+
+        chosen = [mean_scores[0][0], mean_scores[1][0]] if len(mean_scores) >= 2 \
+                else list(mean_scores[0:1])
+        print(f"[PLAYER_FILTER] Chosen: {chosen}")
 
         return [
             {tid: box for tid, box in d.items() if tid in chosen}
             for d in player_detections
         ]
+    
 
-    @staticmethod
-    def _choose_players(
-        court_keypoints: np.ndarray, detections: Dict[int, List[float]]
-    ) -> List[int]:
-        """Return the 2 track_ids whose bbox centers are closest to any keypoint."""
-        distances = []
-        for tid, box in detections.items():
-            player_center = get_center(box)
-            min_d = float("inf")
-            # court_keypoints is a flat [x0,y0,x1,y1,...] array of 28 values
-            for i in range(0, len(court_keypoints), 2):
-                kp = (court_keypoints[i], court_keypoints[i + 1])
-                min_d = min(min_d, measure_distance(player_center, kp))
-            distances.append((tid, min_d))
-
-        # Sort by distance ascending, take the 2 closest
-        distances.sort(key=lambda pair: pair[1])
-        return [distances[0][0], distances[1][0]]
 
     def draw_bboxes(
         self,

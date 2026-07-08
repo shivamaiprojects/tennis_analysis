@@ -27,33 +27,33 @@ from src.utils.conversions import (
 # Real-world reference: the 14 court keypoints, in meters.
 # Origin at top-left doubles corner. X=width, Y=length.
 # =========================================================
-# Derived indices for clarity
-_SINGLES_LEFT_X = DOUBLES_ALLEY_WIDTH_M                        # 1.37
-_SINGLES_RIGHT_X = DOUBLES_COURT_WIDTH_M - DOUBLES_ALLEY_WIDTH_M  # 9.60
-_NET_Y = DOUBLES_COURT_LENGTH_M / 2                            # 11.885
-_SERVICE_LINE_NEAR_Y = DOUBLES_COURT_LENGTH_M - SERVICE_BOX_LENGTH_M  # 17.37
-_CENTER_X = DOUBLES_COURT_WIDTH_M / 2                          # 5.485
+_SINGLES_LEFT_X = DOUBLES_ALLEY_WIDTH_M                          # 1.37
+_SINGLES_RIGHT_X = DOUBLES_COURT_WIDTH_M - DOUBLES_ALLEY_WIDTH_M   # 9.60
+_NET_Y = DOUBLES_COURT_LENGTH_M / 2                              # 11.885
+_SERVICE_LINE_FAR_Y = _NET_Y - SERVICE_BOX_LENGTH_M               # 5.485
+_SERVICE_LINE_NEAR_Y = _NET_Y + SERVICE_BOX_LENGTH_M              # 18.285
+_CENTER_X = DOUBLES_COURT_WIDTH_M / 2                            # 5.485
 
 REAL_WORLD_KEYPOINTS_M: np.ndarray = np.array([
     # Doubles corners
-    [0.0,                    0.0],                            # 0  top-left doubles
-    [DOUBLES_COURT_WIDTH_M,  0.0],                            # 1  top-right doubles
-    [0.0,                    DOUBLES_COURT_LENGTH_M],         # 2  bot-left doubles
-    [DOUBLES_COURT_WIDTH_M,  DOUBLES_COURT_LENGTH_M],         # 3  bot-right doubles
+    [0.0,                    0.0],                             # 0  top-left doubles
+    [DOUBLES_COURT_WIDTH_M,  0.0],                             # 1  top-right doubles
+    [0.0,                    DOUBLES_COURT_LENGTH_M],          # 2  bot-left doubles
+    [DOUBLES_COURT_WIDTH_M,  DOUBLES_COURT_LENGTH_M],          # 3  bot-right doubles
     # Singles corners
-    [_SINGLES_LEFT_X,        0.0],                            # 4  top-left singles
-    [_SINGLES_LEFT_X,        DOUBLES_COURT_LENGTH_M],         # 5  bot-left singles
-    [_SINGLES_RIGHT_X,       0.0],                            # 6  top-right singles
-    [_SINGLES_RIGHT_X,       DOUBLES_COURT_LENGTH_M],         # 7  bot-right singles
-    # Net line intersections (singles sidelines)
-    [_SINGLES_LEFT_X,        _NET_Y],                         # 8  net-left
-    [_SINGLES_RIGHT_X,       _NET_Y],                         # 9  net-right
-    # Service line intersections (near court, singles sidelines)
-    [_SINGLES_LEFT_X,        _SERVICE_LINE_NEAR_Y],           # 10 service-left
-    [_SINGLES_RIGHT_X,       _SERVICE_LINE_NEAR_Y],           # 11 service-right
+    [_SINGLES_LEFT_X,        0.0],                             # 4  top-left singles
+    [_SINGLES_LEFT_X,        DOUBLES_COURT_LENGTH_M],          # 5  bot-left singles
+    [_SINGLES_RIGHT_X,       0.0],                             # 6  top-right singles
+    [_SINGLES_RIGHT_X,       DOUBLES_COURT_LENGTH_M],          # 7  bot-right singles
+    # Far service line intersections
+    [_SINGLES_LEFT_X,        _SERVICE_LINE_FAR_Y],             # 8  far service-left
+    [_SINGLES_RIGHT_X,       _SERVICE_LINE_FAR_Y],             # 9  far service-right
+    # Near service line intersections
+    [_SINGLES_LEFT_X,        _SERVICE_LINE_NEAR_Y],            # 10 near service-left
+    [_SINGLES_RIGHT_X,       _SERVICE_LINE_NEAR_Y],            # 11 near service-right
     # Center T intersections
-    [_CENTER_X,              _NET_Y],                         # 12 net T
-    [_CENTER_X,              _SERVICE_LINE_NEAR_Y],           # 13 service T
+    [_CENTER_X,              _SERVICE_LINE_FAR_Y],             # 12 far center T
+    [_CENTER_X,              _SERVICE_LINE_NEAR_Y],            # 13 near center T
 ], dtype=np.float32)
 
 
@@ -134,7 +134,7 @@ class MiniCourt:
         # Court outline (outer doubles rectangle)
         cv2.rectangle(out, (ox, oy), (ox + w, oy + h), (0, 0, 0), 2)
 
-        # Draw the singles sidelines
+        # Singles sidelines
         sl = int(ox + DOUBLES_ALLEY_WIDTH_M * self._m_to_mini_px_x)
         sr = int(ox + (DOUBLES_COURT_WIDTH_M - DOUBLES_ALLEY_WIDTH_M) * self._m_to_mini_px_x)
         cv2.line(out, (sl, oy), (sl, oy + h), (0, 0, 0), 1)
@@ -145,12 +145,13 @@ class MiniCourt:
         cv2.line(out, (ox, net_y), (ox + w, net_y), (0, 0, 0), 2)
 
         # Service lines
-        near_sl_y = int(oy + (DOUBLES_COURT_LENGTH_M - SERVICE_BOX_LENGTH_M) * self._m_to_mini_px_y)
-        far_sl_y = int(oy + SERVICE_BOX_LENGTH_M * self._m_to_mini_px_y)
+        net_y_m = DOUBLES_COURT_LENGTH_M / 2
+        far_sl_y = int(oy + (net_y_m - SERVICE_BOX_LENGTH_M) * self._m_to_mini_px_y)
+        near_sl_y = int(oy + (net_y_m + SERVICE_BOX_LENGTH_M) * self._m_to_mini_px_y)
         cv2.line(out, (sl, near_sl_y), (sr, near_sl_y), (0, 0, 0), 1)
         cv2.line(out, (sl, far_sl_y), (sr, far_sl_y), (0, 0, 0), 1)
 
-        # Center service line
+        # Center service line (only between the two service lines)
         cx = int(ox + (DOUBLES_COURT_WIDTH_M / 2) * self._m_to_mini_px_x)
         cv2.line(out, (cx, far_sl_y), (cx, near_sl_y), (0, 0, 0), 1)
 
@@ -163,26 +164,43 @@ class MiniCourt:
     ) -> np.ndarray:
         """Draw a dot on the mini court for each player.
 
-        Args:
-            frame: Frame that already has the empty mini-court drawn.
-            player_foot_positions: {track_id: (image_x, image_y)} — foot in image pixels.
+        Skips any player whose projected court position falls far outside the
+        court (e.g., a mid-serve player whose feet are above the far baseline).
+        Prevents wildly out-of-bounds dots on the mini court.
         """
         out = frame.copy()
         for tid, image_foot in player_foot_positions.items():
             real = self.project_to_court(image_foot)
+            if not self._is_within_court_bounds(real, margin_m=2.0):
+                continue
             mini = self.real_to_mini_px(real)
-            color = (0, 0, 255) if tid == 1 else (255, 0, 0)  # ID 1 red, ID 2 blue
+            color = (0, 0, 255) if tid == 1 else (255, 0, 0)
             cv2.circle(out, mini, radius=6, color=color, thickness=-1)
-            cv2.putText(out, f"P{tid}", (mini[0] + 8, mini[1]),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.putText(
+                out, f"P{tid}", (mini[0] + 8, mini[1]),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2,
+            )
         return out
 
     def draw_ball_on_mini_court(
         self, frame: np.ndarray, ball_image_point: Tuple[float, float]
     ) -> np.ndarray:
-        """Draw the ball position on the mini court as a yellow dot."""
+        """Draw the ball on the mini court, skipping if far outside the court."""
         out = frame.copy()
         real = self.project_to_court(ball_image_point)
+        if not self._is_within_court_bounds(real, margin_m=5.0):
+            return out
         mini = self.real_to_mini_px(real)
         cv2.circle(out, mini, radius=4, color=(0, 255, 255), thickness=-1)
         return out
+
+    @staticmethod
+    def _is_within_court_bounds(
+        real: Tuple[float, float], margin_m: float = 0.0
+    ) -> bool:
+        """Check whether a real-world court point is within court + margin."""
+        x, y = real
+        return (
+            -margin_m <= x <= DOUBLES_COURT_WIDTH_M + margin_m
+            and -margin_m <= y <= DOUBLES_COURT_LENGTH_M + margin_m
+        )
