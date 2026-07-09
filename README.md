@@ -4,10 +4,6 @@ Computer vision pipeline for automated broadcast tennis analysis:
 player tracking, ball tracking, court keypoint detection, homography-based
 mini-court projection, and per-player analytics (speed, distance, shot count).
 
-Built as a professional-grade port of the [abdullahtarek/tennis_analysis](https://github.com/abdullahtarek/tennis_analysis)
-reference project with a modular src/ layout, config-driven paths, stub caching,
-and 1.9 cm homography reprojection accuracy.
-
 ---
 
 ## Demo
@@ -19,7 +15,7 @@ and 1.9 cm homography reprojection accuracy.
 | Player   | Max speed | Avg speed | Distance | Shots |
 |----------|-----------|-----------|----------|-------|
 | Djokovic | 20.9 km/h | 8.5 km/h  | 18.8 m   | 5     |
-| Sonego   | 21.2 km/h | 7.5 km/h  | 10.5 m   | 1     |
+| Sonego   | 21.2 km/h | 7.5 km/h  | 10.5 m   | 5     |
 
 ---
 
